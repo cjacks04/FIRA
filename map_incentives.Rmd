@@ -1,0 +1,238 @@
+---
+title: "Vaccine Interventions"
+author: "Corey Jackson"
+date: "2/2/2022"
+output: html_document
+theme: "material"
+---
+
+```{r library_load, echo=FALSE, message=FALSE, results = "hide", warning=FALSE}
+# https://bookdown.org/yihui/rmarkdown/html-document.html 
+# https://www.datadreaming.org/post/r-markdown-theme-gallery/ 
+library(readr)
+library(stringr)
+library(ggmap)
+library(maps)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(tidycensus)
+library(tigris)
+library(tidyr)
+library(dplyr)
+#library(mapview) #devtools::install_github("r-spatial/mapview")
+# Geocode id for Google
+register_google(key = 'AIzaSyBqJnGUAYDNRszPjaOfySDBgfwV-Uucb3o') 
+
+
+# Tutorial on analyzing census data in R: https://walker-data.com/census-r/index.html 
+```
+
+```{r datasetup, echo=FALSE, warning=FALSE, message=FALSE, results = "hide"}
+## Import dataset
+#interventions <- read_csv("~/Library/CloudStorage/Box-Box/FIRA Writing/Interventions/Encouragement-Strategies-1222022.csv")
+
+interventions <- read_csv("~/Library/CloudStorage/Box-Box/_research/fira/Interventions/incentives04092022.csv")
+
+### Clean dataset
+#interventions <- interventions[,c(1:25)]
+# interventions$Address <- str_squish((str_replace_all(interventions$Address, regex("\\W+"), " "))) # remove non asiacc characters 
+# interventions$address_combined <- str_c(interventions$Address,", ",interventions$City,", ",interventions$State)
+# interventions_original <- interventions
+# interventions <- interventions[which(!is.na(interventions$address_combined)),]# remove interventions with no address to lookup
+# 
+# ### Loop throughout data and produce lat/lon information
+# for(i in 1:nrow(interventions))
+#   {
+#     # Print("Working...")
+#     result <- geocode(interventions$address_combined[i], output = "latlona", source = "google")
+#     interventions$lon[i] <- as.numeric(result[1])
+#     interventions$lat[i] <- as.numeric(result[2])
+#     interventions$geoAddress[i] <- as.character(result[3])
+# }
+# 
+
+interventions <- data.frame(interventions)
+interventions <- interventions[which(!is.na(interventions$record_id)),]
+interventions$Full.FIPS..block. <- as.factor(interventions$Full.FIPS..block.)
+interventions$Full.FIPS..tract. <- as.factor(interventions$Full.FIPS..tract.)
+interventions$dose1 <- as.Date(interventions$dose1, format = "%d-%b-%y")
+interventions$dose2 <- as.Date(interventions$does2, format = "%d-%b-%y")
+
+# GET SVI for tracts in Wisconsin
+svi_county <- read_csv("svi_county.csv")
+svi_tract <- read_csv("svi_tract.csv")
+
+# Immunization rate
+immu_rate <- read_csv("vaccination_day_tract.csv")
+immu_rate$Census_Tract <- as.factor(immu_rate$Census_Tract)
+
+immu_rate_org <- immu_rate
+# Need to get the vaccination rate file from SILO and process here.
+immu_rate <- immu_rate[,c(2:4,6)]
+immu_rate$date <- as.Date(immu_rate$date)
+
+immu_rate <- 
+  immu_rate %>%
+  mutate(date = as.Date(date)) %>%
+  complete(nesting(Census_Tract,total_population), date = seq.Date(min(date), max(date), by="day"))
+
+# fill in days with 0 vaccinations to 0
+immu_rate$daily_vaccinations[is.na(immu_rate$daily_vaccinations)] = 0
+
+immu_rate <- as_tibble(immu_rate)
+immu_rate <- immu_rate %>%
+    dplyr::arrange(desc(Census_Tract)) %>%
+    dplyr::group_by(Census_Tract) %>%
+    dplyr::mutate(vacc_03da = zoo::rollmean(daily_vaccinations, k = 2, fill = NA),
+                  vacc_05da = zoo::rollmean(daily_vaccinations, k = 5, fill = NA),
+                  vacc_07da = zoo::rollmean(daily_vaccinations, k = 7, fill = NA),
+                  vacc_15da = zoo::rollmean(daily_vaccinations, k = 15, fill = NA),
+                  vacc_cum = cumsum(daily_vaccinations),
+                  vacc_prop = vacc_cum/total_population) %>%
+  dplyr::ungroup()
+
+# Good visualizations (https://www.storybench.org/how-to-calculate-a-rolling-average-in-r/)
+#write.csv(immu_rate,"immu_rate_rolling.csv")
+```
+
+## Method
+
+### Assumptions
+
+## Overview of dataset
+```{r echo=FALSE, warning=FALSE, message=FALSE, results = "hide"}
+# Which geographies are represented - cities, zip codes, tracts, county
+county <- interventions %>%                         
+     group_by(COUNTY = tolower(County)) %>%
+     summarise(observations = n())
+
+# join SVI data for county
+county <- merge(county,svi_county[,c("COUNTY","RPL_THEMES","RPL_THEME1","RPL_THEME2","RPL_THEME3","RPL_THEME4")],by ="COUNTY",all.x = TRUE)
+
+fips <- interventions %>%                         
+     group_by(FIPS = Full.FIPS..tract.) %>%
+     summarise(n = n())
+
+# merge fips immu_rate
+
+
+# join SVI data for county
+fips <- merge(fips,svi_tract[,c("FIPS","RPL_THEMES","RPL_THEME1","RPL_THEME2","RPL_THEME3","RPL_THEME4")],by="FIPS",all.x = TRUE)
+
+city <- interventions %>%                         
+     group_by(City) %>%
+     summarise(n = n())
+
+intervention_dates <- interventions %>%                         
+     group_by(date  = dose1) %>%
+     summarise(n = n())
+
+
+# three dates need to be corrected
+intervention_dates.viz <- ggplot(data=intervention_dates, aes(x=date, y=n)) +
+  geom_bar(stat="identity")
+
+# Vaccination rates for these geographies
+
+# How to the geographies in our data compare in SVI terms
+
+# Dates represented. Figure with phases as vertical lines
+
+# Common types of incentives e.g., pop-up, mobile clinic 
+
+# Common incentives offered
+
+
+```
+
+
+
+
+```{r mapsetup, echo=FALSE, warning=FALSE, message=FALSE, results = "hide"}
+# Create a map of locations with county boundaries
+# https://r-spatial.org/r/2018/10/25/ggplot2-sf-2.html
+
+# get lat/lon estimates
+sites <- data.frame(longitude = interventions$Longitude, latitude = interventions$Latitude)
+
+counties <- st_as_sf(map("county", plot = FALSE, fill = TRUE))
+counties <- subset(counties, grepl("wisconsin", counties$ID))
+counties$area <- as.numeric(st_area(counties))
+head(counties)
+
+world <- ne_countries(scale = "medium", returnclass = "sf")
+
+# Wisconsin Map
+wisconsin_interventions <- ggplot(data = world) +
+  geom_sf() +
+  geom_sf(data = counties, fill = NA, color = gray(.5)) +
+  geom_point(data = sites, aes(x= longitude,y=latitude)) +
+  coord_sf(xlim = c(-86.5, -93.75), ylim = c(42.5, 47), expand = FALSE)
+
+# Milwaukee Map
+milwaikee_interventions <- ggplot(data = world) +
+  geom_sf() +
+  geom_sf(data = counties, fill = NA, color = gray(.5)) +
+  geom_point(data = sites, aes(x= longitude,y=latitude)) +
+  coord_sf(xlim = c(-87.7, -88.2), ylim = c(42.8, 43.2), expand = FALSE)
+
+dane_interventions <- ggplot(data = world) +
+  geom_sf() +
+  geom_sf(data = counties, fill = NA, color = gray(.5)) +
+  geom_point(data = sites, aes(x= longitude,y=latitude)) +
+  coord_sf(xlim = c(-88.8, -90), ylim = c(42.8, 43.5), expand = FALSE)
+
+# Census tract information
+#https://walker-data.com/census-r/mapping-census-data-with-r.html 
+
+wi_tracts <- tracts("WI", "Milwaukee")
+plot(wi_tracts$geometry)
+dc_block_groups <- block_groups("WI")
+plot(dc_block_groups$geometry)
+```
+
+```{r maps, echo=FALSE, warning=FALSE, message=FALSE, results = "hide"}
+wi_plot <- ggplot(wi_tracts) + 
+  geom_sf() + 
+  theme_void() + 
+  geom_sf(data = counties, fill = NA, color = gray(.5)) +
+  geom_point(data = sites, aes(x= longitude,y=latitude)) 
+
+mil_plot <- ggplot(wi_tracts) + 
+  geom_sf() + 
+  theme_void() + 
+  geom_sf(data = counties, fill = NA, color = gray(.5)) +
+  geom_point(data = sites, aes(x= longitude,y=latitude)) +
+  coord_sf(xlim = c(-87.7, -88.2), ylim = c(42.8, 43.2), expand = FALSE)
+
+dane_plot <- ggplot(wi_tracts) + 
+  geom_sf() + 
+  theme_void() + 
+  geom_sf(data = counties, fill = NA, color = gray(.5)) +
+  geom_point(data = sites, aes(x= longitude,y=latitude)) +
+  coord_sf(xlim = c(-88.8, -90), ylim = c(42.8, 43.5), expand = FALSE)
+```
+
+## Interventions in Wisconsin [County Level]
+```{r warning=FALSE, message=FALSE}
+wisconsin_interventions
+```
+
+```{r warning=FALSE, message=FALSE}
+milwaikee_interventions
+```
+
+```{r warning=FALSE, message=FALSE}
+dane_interventions
+```
+
+
+
+
+
+
+
+
+
+
