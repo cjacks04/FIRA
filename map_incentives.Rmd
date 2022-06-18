@@ -20,6 +20,8 @@ library(tidycensus)
 library(tigris)
 library(tidyr)
 library(dplyr)
+library("readxl")
+
 #library(mapview) #devtools::install_github("r-spatial/mapview")
 # Geocode id for Google
 register_google(key = 'AIzaSyBqJnGUAYDNRszPjaOfySDBgfwV-Uucb3o') 
@@ -31,6 +33,8 @@ register_google(key = 'AIzaSyBqJnGUAYDNRszPjaOfySDBgfwV-Uucb3o')
 ```{r datasetup, echo=FALSE, warning=FALSE, message=FALSE, results = "hide"}
 ## Import dataset
 #interventions <- read_csv("~/Library/CloudStorage/Box-Box/FIRA Writing/Interventions/Encouragement-Strategies-1222022.csv")
+
+my_data <- read_excel(" ")
 
 interventions <- read_csv("~/Library/CloudStorage/Box-Box/_research/fira/Interventions/incentives04092022.csv")
 
