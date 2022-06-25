@@ -42,7 +42,9 @@ library(Wats)          # time series plots
 
 ``` {r, include = FALSE}
 ###### load/clean encouragement data ###### 
-incentives <- read_csv("./Encouragement-Strategies-FINAL-06082022.csv") # loads data
+incentives <- ("/Volumes/cbjackson2/fira/data/incentives/Encouragement-Strategies-FINAL-06072022.xlsx") # loads data
+
+#incentives <- read_csv("./Encouragement-Strategies-FINAL-06082022.csv") # loads data
 incentives_original <- incentives
 # subset for now
 incentives <- incentives[which(!is.na(incentives$dose1)),]
