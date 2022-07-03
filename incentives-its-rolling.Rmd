@@ -42,7 +42,7 @@ library(Wats)          # time series plots
 
 ``` {r, include = FALSE}
 ###### load/clean encouragement data ###### 
-incentives <- ("/Volumes/cbjackson2/fira/data/incentives/Encouragement-Strategies-FINAL-06072022.xlsx") # loads data
+incentives <- read_csv("/Volumes/cbjackson2/fira/data/incentives/Encouragement-Strategies-FINAL-06082022.csv") # loads data
 
 #incentives <- read_csv("./Encouragement-Strategies-FINAL-06082022.csv") # loads data
 incentives_original <- incentives
@@ -58,7 +58,8 @@ incentives <- incentives[order(incentives$id), ]
   
 ####### load/clean vaccination data #######
 # import total, age, gender, race/eth, and tract vaccination rates
-tract_trend <- read_csv("./vaccination_day_tract.csv") # loads data
+# tract_trend <- read_csv("/vaccination_day_tract.csv") # loads data
+tract_trend <- read_csv("/Volumes/cbjackson2/fira/data/vaccination/vaccination_day_tract.csv") # loads data
 tract_trend <- tract_trend %>%
   filter(population > 0) %>%
   mutate(date = lubridate::ymd(date)) 
