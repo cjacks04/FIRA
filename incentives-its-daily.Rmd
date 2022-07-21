@@ -37,29 +37,40 @@ library(stargazer)     # formatting regression output
 library(tibble)
 library(tidyverse)
 library(trend)
-library(Wats)          # time series plots
+library("ggsci")
+library("ggplot2")
+library("gridExtra")
+#library(Wats)          # time series plots
+library(hrbrthemes)
+
 ```
 
 ``` {r, include = FALSE}
 ###### load/clean encouragement data ###### 
-incentives <- read_csv("./Encouragement-Strategies-FINAL-06082022.csv") # loads data
+#incentives <- read_csv("/Volumes/cbjackson2/fira/data/incentives/Encouragement-Strategies-FINAL-06082022.csv") # loads data
+
+ incentives <- read_csv("/Volumes/cbjackson2/fira/data/incentives/Encouragement-Strategies-FINAL-06082022 copy.csv") # loads data
+
+
+#incentives <- read_csv("./Encouragement-Strategies-FINAL-06082022.csv") # loads data
 incentives_original <- incentives
 # subset for now
 incentives <- incentives[which(!is.na(incentives$dose1)),]
 # fix dates
 incentives <- incentives %>%
-  mutate(start = lubridate::dmy(dose1), end = lubridate::dmy(incentives$dose1) + 14) %>%
+  mutate(start = lubridate::dmy(dose1)) %>%
   drop_na(start) %>%
-  select(id = record_id, name = name_given, census_tract = "Full FIPS (tract)", start, end, target_age, target_racethgroup, target_gender) 
+  select(id = record_id, name = name_given, census_tract = "Full FIPS (tract)", start,  target_age, target_racethgroup, target_gender) 
 
 incentives <- incentives[order(incentives$id), ]
   
 ####### load/clean vaccination data #######
 # import total, age, gender, race/eth, and tract vaccination rates
-tract_trend <- read_csv("./vaccination_day_tract.csv") # loads data
+tract_trend <- read_csv("/Volumes/cbjackson2/fira/data/vaccination/vaccination_day_tract.csv") # loads data
+#tract_trend <- read_csv("./vaccination_day_tract.csv") # loads data
 tract_trend <- tract_trend %>%
   filter(population > 0) %>%
-  mutate(date = lubridate::ymd(date), vacc_pop_05da = as.numeric(vacc_pop_05da)) 
+  mutate(date = lubridate::ymd(date)) 
 ```
 
 # Project summary
@@ -88,12 +99,14 @@ __Phase 1B__
 
 # Methods
 
+
 ## A function to build ITS models for each encouragement
+
 ```{r}
 # create a function that builds a ITS model for an encouragement, given fips and the start date
-ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gender, name) {
-  interruption_type <- ifelse(start_or_end == 0, "End", "Start")
-  interruption_date <- as.Date(interruption_date)
+ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
+ 
+   interruption_date <- as.Date(interruption_date)
   
   # filter the data according to the fips
   vaccinations_tract <- tract_trend %>%
@@ -128,9 +141,18 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
   
     interruption_index <- min(which(TS_data$Time_since != 0))
 
-    # show the time series in a scatter plot (only 14 days before / after the interruption)
-    TS_data_new <- TS_data[max(1, (interruption_index - 14)) : min((interruption_index + 13), nrow(TS_data)), ] # change this date range
-
+    # show the time series in a scatter plot (only 14 days before / after the interruption) # CHANGED
+    TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
+    
+    #ggplot(TS_data_new, aes(x=TS_data_new$date, y=TS_data_new$vaccinations_18to65)) + 
+    #geom_point() + 
+    #ggtitle( paste("Effect of the", name, "encouragement (18 to 65)"))
+    #labs(x = paste("Date"), y  = "Daily Vaccinations (18 to 65)") + 
+    #geom_vline(xintercept = TS_data[interruption_index, 2] - 1, linetype = 'dashed') + 
+    #theme_ipsum() +
+    #scale_fill_nejm() + 
+    #theme(plot.margin = unit(c(.1,.1,.1,.1), "cm"))
+    
     plot(TS_data_new$date, TS_data_new$vaccinations_18to65, 
          bty = "n", pch = 15, col = "gray",
          xlab = paste("Date"), ylab = "Daily Vaccinations (18 to 65)", xaxt = "n", 
@@ -139,7 +161,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
   
     # mark the interruption date
     abline(v = TS_data[interruption_index, 2] - 1, col = "firebrick", lty = 2) 
-    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_18to65), paste(interruption_type, "of Encouragement"), col = "firebrick", cex = 1.3, pos = 4)
+    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_18to65), "Start of Encouragement", col = "firebrick", cex = 1.3, pos = 4)
 
     # add the regression line
     TS_model <- lm(vaccinations_18to65 ~ Time + Treatment + Time_since, data = TS_data_new)
@@ -153,8 +175,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
            omit.stat = "all", digits = 2)
   
     # look at the trend only during the 2 weeks
-    if (interruption_type == "Start") {
-      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 14)),]
+      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] # CHANGED
       plot(during_encouragment$date, during_encouragment$vaccinations_18to65, 
          bty = "n", pch = 15, col = "gray",
          xlab = paste("Date"), ylab = "Daily Vaccinations (18 to 65)", xaxt = "n", 
@@ -163,7 +184,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
      if (nrow(drop_na(during_encouragment)) >= 2) {
         abline(lm(vaccinations_18to65 ~ date, data = during_encouragment), col="steelblue", lwd = 2)
       }
-    }
+  
     model <- summary(TS_model)
     if (length(model) == 0) {
       next
@@ -171,11 +192,29 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
       next
     } else {
       p_val <- pf(model$fstatistic[1], model$fstatistic[2], model$fstatistic[3], lower.tail = FALSE)
+      actual_0 <- TS_data$vaccinations_18to65[min(which(TS_data$Treatment == 1))]
+      actual_3 <- TS_data$vaccinations_18to65[which(TS_data$Time_since == 3)]
+      actual_5 <- TS_data$vaccinations_18to65[which(TS_data$Time_since == 5)]
+      counterfactual_0 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[min(which(TS_data$Treatment == 1))]
+      counterfactual_3 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[which(TS_data$Time_since == 3)]
+      counterfactual_5 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[which(TS_data$Time_since == 5)]
+      
       all_models <<- add_row(all_models, "ID" = as.integer(id), 
                              "Encouragement" = as.character(name), "Group" = "18 to 65",
-                             "Start/End" = interruption_type, "Intercept" = model$coef[1,1], "Time" =
-                             model$coef[2,1], "Treatment" = model$coef[3,1], "Time Since" =
-                             model$coef[4,1], "P-value" = p_val)
+                             "Intercept" = model$coef[1,1], "P-value (Intercept)" = model$coef[1,4],
+                             "Time" = model$coef[2,1], "P-value (Time)" = model$coef[2,4],
+                             "Treatment" = model$coef[3,1], "P-value (Treatment)" = model$coef[3,4],
+                             "Time Since" = model$coef[4,1], "P-value (Time Since)" = model$coef[4,4],
+                             "P-value (Model)" = p_val,
+                             "Actual (Day 0)" = actual_0,
+                             "Counterfactual (Day 0)" = counterfactual_0, 
+                             "Difference (Day 0)" = actual_0 - counterfactual_0, 
+                             "Actual (Day 3)" = actual_3,
+                             "Counterfactual (Day 3)" = counterfactual_3, 
+                             "Difference (Day 3)" = actual_0 - counterfactual_3, 
+                             "Actual (Day 5)" =  actual_5, 
+                             "Counterfactual (Day 5)" = counterfactual_5, 
+                             "Difference (Day 5)" = actual_5 - counterfactual_5)
       model
     }
   }
@@ -189,7 +228,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
     interruption_index <- min(which(TS_data$Time_since != 0))
  
     # show the time series in a scatter plot (only 14 days before / after the interruption)
-    TS_data_new <- TS_data[max(1, (interruption_index - 14)) : min((interruption_index + 13), nrow(TS_data)), ] # change this date range
+    TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
 
     plot(TS_data_new$date, TS_data_new$vaccinations_under18, 
          bty = "n", pch = 15, col = "gray",
@@ -199,7 +238,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
   
     # mark the interruption date
     abline(v = TS_data[interruption_index, 2] - 1, col = "firebrick", lty = 2) 
-    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_under18), paste(interruption_type, "of Encouragement"), col = "firebrick", cex = 1.3, pos = 4)
+    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_under18), "Start of Encouragement", col = "firebrick", cex = 1.3, pos = 4)
 
     # add the regression line
     TS_model <- lm(vaccinations_under18 ~ Time + Treatment + Time_since, data = TS_data_new)
@@ -213,8 +252,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
            omit.stat = "all", digits = 2)
   
     # look at the trend only during the 2 weeks
-    if (interruption_type == "Start") {
-      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 14)),]
+      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] # CHANGED
       plot(during_encouragment$date, during_encouragment$vaccinations_under18, 
          bty = "n", pch = 15, col = "gray",
          xlab = paste("Date"), ylab = "Daily Vaccinations (under 18)", xaxt = "n", 
@@ -223,7 +261,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
      if (nrow(drop_na(during_encouragment)) >= 2) {
         abline(lm(vaccinations_under18 ~ date, data = during_encouragment), col="steelblue", lwd = 2)
       }
-    }
+  
     model <- summary(TS_model)
     if (length(model) == 0) {
       next
@@ -231,11 +269,29 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
       next
     } else {
       p_val <- pf(model$fstatistic[1], model$fstatistic[2], model$fstatistic[3], lower.tail = FALSE)
+      actual_0 <- TS_data$vaccinations_under18[min(which(TS_data$Treatment == 1))]
+      actual_3 <- TS_data$vaccinations_under18[which(TS_data$Time_since == 3)]
+      actual_5 <- TS_data$vaccinations_under18[which(TS_data$Time_since == 5)]
+      counterfactual_0 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[min(which(TS_data$Treatment == 1))]
+      counterfactual_3 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[which(TS_data$Time_since == 3)]
+      counterfactual_5 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[which(TS_data$Time_since == 5)]
+      
       all_models <<- add_row(all_models, "ID" = as.integer(id), 
                              "Encouragement" = as.character(name), "Group" = "Under 18",
-                             "Start/End" = interruption_type, "Intercept" = model$coef[1,1], "Time" =
-                             model$coef[2,1], "Treatment" = model$coef[3,1], "Time Since" =
-                             model$coef[4,1], "P-value" = p_val)
+                             "Intercept" = model$coef[1,1], "P-value (Intercept)" = model$coef[1,4],
+                             "Time" = model$coef[2,1], "P-value (Time)" = model$coef[2,4],
+                             "Treatment" = model$coef[3,1], "P-value (Treatment)" = model$coef[3,4],
+                             "Time Since" = model$coef[4,1], "P-value (Time Since)" = model$coef[4,4],
+                             "P-value (Model)" = p_val,
+                             "Actual (Day 0)" = actual_0,
+                             "Counterfactual (Day 0)" = counterfactual_0, 
+                             "Difference (Day 0)" = actual_0 - counterfactual_0, 
+                             "Actual (Day 3)" = actual_3,
+                             "Counterfactual (Day 3)" = counterfactual_3, 
+                             "Difference (Day 3)" = actual_0 - counterfactual_3, 
+                             "Actual (Day 5)" =  actual_5, 
+                             "Counterfactual (Day 5)" = counterfactual_5, 
+                             "Difference (Day 5)" = actual_5 - counterfactual_5)
       model
     }
   } 
@@ -249,7 +305,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
     interruption_index <- min(which(TS_data$Time_since != 0))
 
     # show the time series in a scatter plot (only 14 days before / after the interruption)
-    TS_data_new <- TS_data[max(1, (interruption_index - 14)) : min((interruption_index + 13), nrow(TS_data)), ] # change this date range
+    TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
 
     plot(TS_data_new$date, TS_data_new$vaccinations_black, 
          bty = "n", pch = 15, col = "gray",
@@ -259,7 +315,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
   
     # mark the interruption date
     abline(v = TS_data[interruption_index, 2] - 1, col = "firebrick", lty = 2) 
-    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_black), paste(interruption_type, "of Encouragement"), col = "firebrick", cex = 1.3, pos = 4)
+    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_black), "Start of Encouragement", col = "firebrick", cex = 1.3, pos = 4)
 
     # add the regression line
     TS_model <- lm(vaccinations_black ~ Time + Treatment + Time_since, data = TS_data_new)
@@ -273,8 +329,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
            omit.stat = "all", digits = 2)
   
     # look at the trend only during the 2 weeks
-    if (interruption_type == "Start") {
-      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 14)),]
+      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] #CHANGE
       plot(during_encouragment$date, during_encouragment$vaccinations_black, 
          bty = "n", pch = 15, col = "gray",
          xlab = paste("Date"), ylab = "Daily Vaccinations (Black)", xaxt = "n", 
@@ -283,7 +338,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
      if (nrow(drop_na(during_encouragment)) >= 2) {
         abline(lm(vaccinations_black ~ date, data = during_encouragment), col="steelblue", lwd = 2)
       }
-    }
+    
     model <- summary(TS_model)
     if (length(model) == 0) {
       next
@@ -291,11 +346,29 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
       next
     } else {
       p_val <- pf(model$fstatistic[1], model$fstatistic[2], model$fstatistic[3], lower.tail = FALSE)
+      actual_0 <- TS_data$vaccinations_black[min(which(TS_data$Treatment == 1))]
+      actual_3 <- TS_data$vaccinations_black[which(TS_data$Time_since == 3)]
+      actual_5 <- TS_data$vaccinations_black[which(TS_data$Time_since == 5)]
+      counterfactual_0 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[min(which(TS_data$Treatment == 1))]
+      counterfactual_3 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[which(TS_data$Time_since == 3)]
+      counterfactual_5 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[which(TS_data$Time_since == 5)]
+      
       all_models <<- add_row(all_models, "ID" = as.integer(id), 
                              "Encouragement" = as.character(name), "Group" = "Black",
-                             "Start/End" = interruption_type, "Intercept" = model$coef[1,1], "Time" =
-                             model$coef[2,1], "Treatment" = model$coef[3,1], "Time Since" =
-                             model$coef[4,1], "P-value" = p_val)
+                             "Intercept" = model$coef[1,1], "P-value (Intercept)" = model$coef[1,4],
+                             "Time" = model$coef[2,1], "P-value (Time)" = model$coef[2,4],
+                             "Treatment" = model$coef[3,1], "P-value (Treatment)" = model$coef[3,4],
+                             "Time Since" = model$coef[4,1], "P-value (Time Since)" = model$coef[4,4],
+                             "P-value (Model)" = p_val,
+                             "Actual (Day 0)" = actual_0,
+                             "Counterfactual (Day 0)" = counterfactual_0, 
+                             "Difference (Day 0)" = actual_0 - counterfactual_0, 
+                             "Actual (Day 3)" = actual_3,
+                             "Counterfactual (Day 3)" = counterfactual_3, 
+                             "Difference (Day 3)" = actual_0 - counterfactual_3, 
+                             "Actual (Day 5)" =  actual_5, 
+                             "Counterfactual (Day 5)" = counterfactual_5, 
+                             "Difference (Day 5)" = actual_5 - counterfactual_5)
       model
     }
   }
@@ -309,7 +382,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
     interruption_index <- min(which(TS_data$Time_since != 0))
  
     # show the time series in a scatter plot (only 14 days before / after the interruption)
-    TS_data_new <- TS_data[max(1, (interruption_index - 14)) : min((interruption_index + 13), nrow(TS_data)), ] # change this date range
+    TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
 
     plot(TS_data_new$date, TS_data_new$vaccinations_aian, 
          bty = "n", pch = 15, col = "gray",
@@ -319,7 +392,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
   
     # mark the interruption date
     abline(v = TS_data[interruption_index, 2] - 1, col = "firebrick", lty = 2) 
-    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_aian), paste(interruption_type, "of Encouragement"), col = "firebrick", cex = 1.3, pos = 4)
+    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_aian), "Start of Encouragement", col = "firebrick", cex = 1.3, pos = 4)
 
     # add the regression line
     TS_model <- lm(vaccinations_aian ~ Time + Treatment + Time_since, data = TS_data_new)
@@ -333,8 +406,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
            omit.stat = "all", digits = 2)
   
     # look at the trend only during the 2 weeks
-    if (interruption_type == "Start") {
-      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 14)),]
+      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] #CHANGE
       plot(during_encouragment$date, during_encouragment$vaccinations_aian, 
          bty = "n", pch = 15, col = "gray",
          xlab = paste("Date"), ylab = "Daily Vaccinations (Aian)", xaxt = "n", 
@@ -343,7 +415,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
      if (nrow(drop_na(during_encouragment)) >= 2) {
         abline(lm(vaccinations_aian ~ date, data = during_encouragment), col="steelblue", lwd = 2)
       }
-    }
+    
     model <- summary(TS_model)
     if (length(model) == 0) {
       next
@@ -351,11 +423,29 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
       next
     } else {
       p_val <- pf(model$fstatistic[1], model$fstatistic[2], model$fstatistic[3], lower.tail = FALSE)
+      actual_0 <- TS_data$vaccinations_aian[min(which(TS_data$Treatment == 1))]
+      actual_3 <- TS_data$vaccinations_aian[which(TS_data$Time_since == 3)]
+      actual_5 <- TS_data$vaccinations_aian[which(TS_data$Time_since == 5)]
+      counterfactual_0 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[min(which(TS_data$Treatment == 1))]
+      counterfactual_3 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[which(TS_data$Time_since == 3)]
+      counterfactual_5 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[which(TS_data$Time_since == 5)]
+      
       all_models <<- add_row(all_models, "ID" = as.integer(id), 
                              "Encouragement" = as.character(name), "Group" = "Aian",
-                             "Start/End" = interruption_type, "Intercept" = model$coef[1,1], "Time" =
-                             model$coef[2,1], "Treatment" = model$coef[3,1], "Time Since" =
-                             model$coef[4,1], "P-value" = p_val)
+                             "Intercept" = model$coef[1,1], "P-value (Intercept)" = model$coef[1,4],
+                             "Time" = model$coef[2,1], "P-value (Time)" = model$coef[2,4],
+                             "Treatment" = model$coef[3,1], "P-value (Treatment)" = model$coef[3,4],
+                             "Time Since" = model$coef[4,1], "P-value (Time Since)" = model$coef[4,4],
+                             "P-value (Model)" = p_val,
+                             "Actual (Day 0)" = actual_0,
+                             "Counterfactual (Day 0)" = counterfactual_0, 
+                             "Difference (Day 0)" = actual_0 - counterfactual_0, 
+                             "Actual (Day 3)" = actual_3,
+                             "Counterfactual (Day 3)" = counterfactual_3, 
+                             "Difference (Day 3)" = actual_0 - counterfactual_3, 
+                             "Actual (Day 5)" =  actual_5, 
+                             "Counterfactual (Day 5)" = counterfactual_5, 
+                             "Difference (Day 5)" = actual_5 - counterfactual_5)
       model
     }
   }
@@ -369,7 +459,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
     interruption_index <- min(which(TS_data$Time_since != 0))
     
     # show the time series in a scatter plot (only 14 days before / after the interruption)
-    TS_data_new <- TS_data[max(1, (interruption_index - 14)) : min((interruption_index + 13), nrow(TS_data)), ] # change this date range
+    TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
 
     plot(TS_data_new$date, TS_data_new$vaccinations_Ehispanic, 
          bty = "n", pch = 15, col = "gray",
@@ -379,7 +469,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
   
     # mark the interruption date
     abline(v = TS_data[interruption_index, 2] - 1, col = "firebrick", lty = 2) 
-    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_Ehispanic), paste(interruption_type, "of Encouragement"), col = "firebrick", cex = 1.3, pos = 4)
+    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_Ehispanic), "Start of Encouragement", col = "firebrick", cex = 1.3, pos = 4)
 
     # add the regression line
     TS_model <- lm(vaccinations_Ehispanic ~ Time + Treatment + Time_since, data = TS_data_new)
@@ -393,8 +483,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
            omit.stat = "all", digits = 2)
   
     # look at the trend only during the 2 weeks
-    if (interruption_type == "Start") {
-      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 14)),]
+      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] #CHANGE
       plot(during_encouragment$date, during_encouragment$vaccinations_Ehispanic, 
          bty = "n", pch = 15, col = "gray",
          xlab = paste("Date"), ylab = "Daily Vaccinations (Hispanic)", xaxt = "n", 
@@ -403,7 +492,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
      if (nrow(drop_na(during_encouragment)) >= 2) {
         abline(lm(vaccinations_Ehispanic ~ date, data = during_encouragment), col="steelblue", lwd = 2)
       }
-    }
+    
     model <- summary(TS_model)
     if (length(model) == 0) {
       next
@@ -411,11 +500,29 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
       next
     } else {
       p_val <- pf(model$fstatistic[1], model$fstatistic[2], model$fstatistic[3], lower.tail = FALSE)
+      actual_0 <- TS_data$vaccinations_Ehispanic[min(which(TS_data$Treatment == 1))]
+      actual_3 <- TS_data$vaccinations_Ehispanic[which(TS_data$Time_since == 3)]
+      actual_5 <- TS_data$vaccinations_Ehispanic[which(TS_data$Time_since == 5)]
+      counterfactual_0 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[min(which(TS_data$Treatment == 1))]
+      counterfactual_3 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[which(TS_data$Time_since == 3)]
+      counterfactual_5 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[which(TS_data$Time_since == 5)]
+      
       all_models <<- add_row(all_models, "ID" = as.integer(id), 
                              "Encouragement" = as.character(name), "Group" = "Hispanic",
-                             "Start/End" = interruption_type, "Intercept" = model$coef[1,1], "Time" =
-                             model$coef[2,1], "Treatment" = model$coef[3,1], "Time Since" =
-                             model$coef[4,1], "P-value" = p_val)
+                             "Intercept" = model$coef[1,1], "P-value (Intercept)" = model$coef[1,4],
+                             "Time" = model$coef[2,1], "P-value (Time)" = model$coef[2,4],
+                             "Treatment" = model$coef[3,1], "P-value (Treatment)" = model$coef[3,4],
+                             "Time Since" = model$coef[4,1], "P-value (Time Since)" = model$coef[4,4],
+                             "P-value (Model)" = p_val,
+                             "Actual (Day 0)" = actual_0,
+                             "Counterfactual (Day 0)" = counterfactual_0, 
+                             "Difference (Day 0)" = actual_0 - counterfactual_0, 
+                             "Actual (Day 3)" = actual_3,
+                             "Counterfactual (Day 3)" = counterfactual_3, 
+                             "Difference (Day 3)" = actual_0 - counterfactual_3, 
+                             "Actual (Day 5)" =  actual_5, 
+                             "Counterfactual (Day 5)" = counterfactual_5, 
+                             "Difference (Day 5)" = actual_5 - counterfactual_5)
       model
     }
   }
@@ -429,7 +536,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
     interruption_index <- min(which(TS_data$Time_since != 0))
 
     # show the time series in a scatter plot (only 14 days before / after the interruption)
-    TS_data_new <- TS_data[max(1, (interruption_index - 14)) : min((interruption_index + 13), nrow(TS_data)), ] # change this date range
+    TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
 
     plot(TS_data_new$date, TS_data_new$vaccinations_asian, 
          bty = "n", pch = 15, col = "gray",
@@ -439,7 +546,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
   
     # mark the interruption date
     abline(v = TS_data[interruption_index, 2] - 1, col = "firebrick", lty = 2) 
-    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_asian), paste(interruption_type, "of Encouragement"), col = "firebrick", cex = 1.3, pos = 4)
+    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_asian), "Start of Encouragement", col = "firebrick", cex = 1.3, pos = 4)
 
     # add the regression line
     TS_model <- lm(vaccinations_asian ~ Time + Treatment + Time_since, data = TS_data_new)
@@ -453,8 +560,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
            omit.stat = "all", digits = 2)
   
     # look at the trend only during the 2 weeks
-    if (interruption_type == "Start") {
-      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 14)),]
+      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] #CHANGE
       plot(during_encouragment$date, during_encouragment$vaccinations_asian, 
          bty = "n", pch = 15, col = "gray",
          xlab = paste("Date"), ylab = "Daily Vaccinations (Asian)", xaxt = "n", 
@@ -463,19 +569,37 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
      if (nrow(drop_na(during_encouragment)) >= 2) {
         abline(lm(vaccinations_asian ~ date, data = during_encouragment), col="steelblue", lwd = 2)
       }
-    }
+    
     model <- summary(TS_model)
     if (length(model) == 0) {
       next
     } else if (length(model$coef[,1]) < 4) {
       next
-    } else {
+    } else {      
       p_val <- pf(model$fstatistic[1], model$fstatistic[2], model$fstatistic[3], lower.tail = FALSE)
+      actual_0 <- TS_data$vaccinations_asian[min(which(TS_data$Treatment == 1))]
+      actual_3 <- TS_data$vaccinations_asian[which(TS_data$Time_since == 3)]
+      actual_5 <- TS_data$vaccinations_asian[which(TS_data$Time_since == 5)]
+      counterfactual_0 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[min(which(TS_data$Treatment == 1))]
+      counterfactual_3 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[which(TS_data$Time_since == 3)]
+      counterfactual_5 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[which(TS_data$Time_since == 5)]
+      
       all_models <<- add_row(all_models, "ID" = as.integer(id), 
                              "Encouragement" = as.character(name), "Group" = "Asian",
-                             "Start/End" = interruption_type, "Intercept" = model$coef[1,1], "Time" =
-                             model$coef[2,1], "Treatment" = model$coef[3,1], "Time Since" =
-                             model$coef[4,1], "P-value" = p_val)
+                             "Intercept" = model$coef[1,1], "P-value (Intercept)" = model$coef[1,4],
+                             "Time" = model$coef[2,1], "P-value (Time)" = model$coef[2,4],
+                             "Treatment" = model$coef[3,1], "P-value (Treatment)" = model$coef[3,4],
+                             "Time Since" = model$coef[4,1], "P-value (Time Since)" = model$coef[4,4],
+                             "P-value (Model)" = p_val,
+                             "Actual (Day 0)" = actual_0,
+                             "Counterfactual (Day 0)" = counterfactual_0, 
+                             "Difference (Day 0)" = actual_0 - counterfactual_0, 
+                             "Actual (Day 3)" = actual_3,
+                             "Counterfactual (Day 3)" = counterfactual_3, 
+                             "Difference (Day 3)" = actual_0 - counterfactual_3, 
+                             "Actual (Day 5)" =  actual_5, 
+                             "Counterfactual (Day 5)" = counterfactual_5, 
+                             "Difference (Day 5)" = actual_5 - counterfactual_5)
       model
     } 
   }
@@ -489,7 +613,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
     interruption_index <- min(which(TS_data$Time_since != 0))
 
     # show the time series in a scatter plot (only 14 days before / after the interruption)
-    TS_data_new <- TS_data[max(1, (interruption_index - 14)) : min((interruption_index + 13), nrow(TS_data)), ] # change this date range
+    TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
 
     plot(TS_data_new$date, TS_data_new$vaccinations_day, 
          bty = "n", pch = 15, col = "gray",
@@ -499,7 +623,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
   
     # mark the interruption date
     abline(v = TS_data[interruption_index, 2] - 1, col = "firebrick", lty = 2) 
-    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_day), paste(interruption_type, "of Encouragement"), col = "firebrick", cex = 1.3, pos = 4)
+    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_day), "Start of Encouragement", col = "firebrick", cex = 1.3, pos = 4)
 
     # add the regression line
     TS_model <- lm(vaccinations_day ~ Time + Treatment + Time_since, data = TS_data_new)
@@ -513,8 +637,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
            omit.stat = "all", digits = 2)
   
     # look at the trend only during the 2 weeks
-    if (interruption_type == "Start") {
-      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 14)),]
+      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] #CHANGE
       plot(during_encouragment$date, during_encouragment$vaccinations_day, 
          bty = "n", pch = 15, col = "gray",
          xlab = paste("Date"), ylab = "Daily Vaccinations (all)", xaxt = "n", 
@@ -523,7 +646,7 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
      if (nrow(drop_na(during_encouragment)) >= 2) {
         abline(lm(vaccinations_day ~ date, data = during_encouragment), col="steelblue", lwd = 2)
       }
-    }
+    
     model <- summary(TS_model)
     if (length(model) == 0) {
       next
@@ -531,11 +654,29 @@ ITS_model <- function(id, tract, interruption_date, start_or_end, age, race, gen
       next
     } else {
       p_val <- pf(model$fstatistic[1], model$fstatistic[2], model$fstatistic[3], lower.tail = FALSE)
+      actual_0 <- TS_data$vaccinations_day[min(which(TS_data$Treatment == 1))]
+      actual_3 <- TS_data$vaccinations_day[which(TS_data$Time_since == 3)]
+      actual_5 <- TS_data$vaccinations_day[which(TS_data$Time_since == 5)]
+      counterfactual_0 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[min(which(TS_data$Treatment == 1))]
+      counterfactual_3 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[which(TS_data$Time_since == 3)]
+      counterfactual_5 <- model$coef[1,1] + model$coef[2,1] * TS_data$Time[which(TS_data$Time_since == 5)]
+      
       all_models <<- add_row(all_models, "ID" = as.integer(id), 
                              "Encouragement" = as.character(name), "Group" = "All",
-                             "Start/End" = interruption_type, "Intercept" = model$coef[1,1], "Time" =
-                             model$coef[2,1], "Treatment" = model$coef[3,1], "Time Since" =
-                             model$coef[4,1], "P-value" = p_val)
+                             "Intercept" = model$coef[1,1], "P-value (Intercept)" = model$coef[1,4],
+                             "Time" = model$coef[2,1], "P-value (Time)" = model$coef[2,4],
+                             "Treatment" = model$coef[3,1], "P-value (Treatment)" = model$coef[3,4],
+                             "Time Since" = model$coef[4,1], "P-value (Time Since)" = model$coef[4,4],
+                             "P-value (Model)" = p_val,
+                             "Actual (Day 0)" = actual_0,
+                             "Counterfactual (Day 0)" = counterfactual_0, 
+                             "Difference (Day 0)" = actual_0 - counterfactual_0, 
+                             "Actual (Day 3)" = actual_3,
+                             "Counterfactual (Day 3)" = counterfactual_3, 
+                             "Difference (Day 3)" = actual_0 - counterfactual_3, 
+                             "Actual (Day 5)" =  actual_5, 
+                             "Counterfactual (Day 5)" = counterfactual_5, 
+                             "Difference (Day 5)" = actual_5 - counterfactual_5)
       model
     } 
   }
@@ -595,9 +736,11 @@ An example of our data appear below
 ### Constraints
 
 # Results
+
 ```{r}
 # Report the analysis for our ITS here
-all_models <- tibble("ID" = numeric(), "Encouragement" = character(), "Group" = character(), "Start/End" = character(), "Intercept" = numeric(), "Time" = numeric(), "Treatment" = numeric(), "Time Since" = numeric(), "P-value" = numeric())
+all_models <- tibble("ID" = numeric(), "Encouragement" = character(), "Group" = character(), "Intercept" = numeric(), "P-value (Intercept)" = numeric(), "Time" = numeric(), "P-value (Time)" = numeric(), "Treatment" = numeric(), "P-value (Treatment)" = numeric(), "Time Since" = numeric(), "P-value (Time Since)" = numeric(), "P-value (Model)" = numeric(), "Actual (Day 0)" = numeric(), "Counterfactual (Day 0)" = numeric(), "Difference (Day 0)" = numeric(), "Actual (Day 3)" = numeric(), "Counterfactual (Day 3)" = numeric(), "Difference (Day 3)" = numeric(), "Actual (Day 5)" = numeric(), "Counterfactual (Day 5)" = numeric(), "Difference (Day 5)" = numeric())
+
 for (row in 1:nrow(incentives)) {
   id <- incentives[row, "id"]
   tract <- incentives[row, "census_tract"]
@@ -605,7 +748,6 @@ for (row in 1:nrow(incentives)) {
   race <- incentives[row, "target_racethgroup"]
   gender <- incentives[row, "target_gender"]
   start_date <- as.data.frame(incentives[row, "start"])[1, 1]
-  end_date<- as.data.frame(incentives[row, "end"])[1, 1]
   name <- incentives[row, "name"]
   cat(paste("\nEncouragement:", name, "\n"))
   cat(paste("\n   ID: ", id, "\n"))
@@ -615,19 +757,13 @@ for (row in 1:nrow(incentives)) {
   cat(paste("\n   Target gender(s): ", gender, "\n"))
   cat(paste("\n   Start date:", start_date, "\n"))
   cat("\n")
-  if (typeof(ITS_model(id, tract, start_date, 1, age, race, gender, name)) == "logical") {
+  if (typeof(ITS_model(id, tract, start_date, age, race, gender, name)) == "logical") {
     next
   }
   cat("\n")
-  cat(paste("\n   End date:", end_date, "\n"))
-  cat("\n")
-  if (typeof(ITS_model(id, tract, end_date, 0, age, race, gender, name)) == "logical") {
-    next
-  }
 }
 ```
 
-## Summary Table
 ```{r}
-pander(all_models)
+write_csv(all_models, file = "./summary.csv", na = "NA", append = FALSE)
 ```
