@@ -48,9 +48,9 @@ library(scales)
 
 ``` {r, include = FALSE}
 ###### load/clean encouragement data ###### 
-#incentives <- read_csv("/Volumes/cbjackson2/fira/data/incentives/Encouragement-Strategies-FINAL-06082022.csv") # loads data
+incentives <- read_csv("/Volumes/cbjackson2/fira/data/incentives/Encouragement-Strategies-FINAL-06082022.csv") # loads data
 
- incentives <- read_csv("/Volumes/cbjackson2/fira/data/incentives/Encouragement-Strategies-FINAL-06082022 copy.csv") # loads data
+#incentives <- read_csv("/Volumes/cbjackson2/fira/data/incentives/Encouragement-Strategies-FINAL-06082022 copy.csv") # loads data
 
 
 #incentives <- read_csv("./Encouragement-Strategies-FINAL-06082022.csv") # loads data
@@ -162,26 +162,29 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
     #print(TS_data_new)  
     #str(TS_data_new)    
     
-    p <- ggplot(TS_data_new2, aes(x = date, y = vaccinations_18to65, group = period)) + 
-      geom_point()  + 
-      ggtitle(paste("Effect of the", name, "encouragement (18 to 65)")) +
-      labs(x = "Date", y  = "Daily Vaccinations (18 to 65)") + 
-      geom_smooth(method = lm, color = "#0072B5FF", se = TRUE) +
-      #geom_vline(xintercept = TS_data[interruption_index, 2] - 1, linetype = 'dashed')+
-      theme_ipsum() +
-      scale_fill_nejm() + 
-      theme(plot.margin = unit(c(.1,.1,.1,.1), "cm"))
-  print(p)
     
-  #plot(TS_data_new$date, TS_data_new$vaccinations_18to65, 
-  #       bty = "n", pch = 15, col = "gray",
-  #       xlab = paste("Date"), ylab = "Daily Vaccinations (18 to 65)", xaxt = "n", 
-  #       main = paste("Effect of the", name, "encouragement (18 to 65)"))
-  #  axis(1, TS_data_new$date, format(TS_data_new$date, "%Y-%m-%d"))
+    #### CODE WORKS
+    #p <- ggplot(TS_data_new2, aes(x = date, y = vaccinations_18to65, group = period)) + 
+    #  geom_point()  + 
+    #  ggtitle(paste("Effect of the", name, "encouragement (18 to 65)")) +
+    #  labs(x = "Date", y  = "Daily Vaccinations (18 to 65)") + 
+    #  geom_smooth(method = lm, color = "#0072B5FF", se = TRUE) +
+      #geom_vline(xintercept = TS_data[interruption_index, 2] - 1, linetype = 'dashed')+
+    #  theme_ipsum() +
+    #  scale_fill_nejm() + 
+    #  theme(plot.margin = unit(c(.1,.1,.1,.1), "cm"))
+  #print(p)
+        #### CODE WORKS
+
+  plot(TS_data_new$date, TS_data_new$vaccinations_18to65, 
+         bty = "n", pch = 15, col = "gray",
+         xlab = paste("Date"), ylab = "Daily Vaccinations (18 to 65)", xaxt = "n", 
+         main = paste("Effect of the", name, "encouragement (18 to 65)"))
+    axis(1, TS_data_new$date, format(TS_data_new$date, "%Y-%m-%d"))
   
     # mark the interruption date
-    #abline(v = TS_data[interruption_index, 2] - 1, col = "firebrick", lty = 2) 
-    #text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_18to65), "Start of Encouragement", col = "firebrick", cex = 1.3, pos = 4)
+    abline(v = TS_data[interruption_index, 2] - 1, col = "firebrick", lty = 2) 
+  text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_18to65), "Start of Encouragement", col = "firebrick", cex = 1.3, pos = 4)
 
     # add the regression line
     TS_model <- lm(vaccinations_18to65 ~ Time + Treatment + Time_since, data = TS_data_new)
