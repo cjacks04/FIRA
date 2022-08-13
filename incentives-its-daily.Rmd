@@ -50,9 +50,6 @@ library(scales)
 ###### load/clean encouragement data ###### 
 incentives <- read_csv("/Volumes/cbjackson2/fira/data/incentives/Encouragement-Strategies-FINAL-06082022.csv") # loads data
 
-#incentives <- read_csv("/Volumes/cbjackson2/fira/data/incentives/Encouragement-Strategies-FINAL-06082022 copy.csv") # loads data
-
-
 #incentives <- read_csv("./Encouragement-Strategies-FINAL-06082022.csv") # loads data
 incentives_original <- incentives
 # subset for now
@@ -64,7 +61,7 @@ incentives <- incentives %>%
   select(id = record_id, name = name_given, census_tract = "Full FIPS (tract)", start,  target_age, target_racethgroup, target_gender) 
 
 incentives <- incentives[order(incentives$id), ]
-  
+ incentives <- incentives[1,]
 ####### load/clean vaccination data #######
 # import total, age, gender, race/eth, and tract vaccination rates
 tract_trend <- read_csv("/Volumes/cbjackson2/fira/data/vaccination/vaccination_day_tract.csv") # loads data
@@ -107,7 +104,6 @@ __Phase 1B__
 
 # create a function that builds a ITS model for an encouragement, given fips and the start date
 ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
- 
    interruption_date <- as.Date(interruption_date)
   
   # filter the data according to the fips
@@ -140,40 +136,26 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
       mutate(Treatment = ifelse(date < interruption_date, 0, 1), 
              Time_since = ifelse(Treatment == 0, 0, as.integer(date - interruption_date))) %>%
       select(vaccinations_18to65, date, Time, Treatment, Time_since) 
+  print(TS_data)
   
     interruption_index <- min(which(TS_data$Time_since != 0))
 
     # show the time series in a scatter plot (only 14 days before / after the interruption) # CHANGED
     TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
-    
-    #ggplot(TS_data_new, aes(x=TS_data_new$date, y=TS_data_new$vaccinations_18to65)) + 
-    #geom_point() + 
-    #ggtitle( paste("Effect of the", name, "encouragement (18 to 65)"))
-    #labs(x = paste("Date"), y  = "Daily Vaccinations (18 to 65)") + 
-    #geom_vline(xintercept = TS_data[interruption_index, 2] - 1, linetype = 'dashed') + 
-    #theme_ipsum() +
-    #scale_fill_nejm() + 
-    #theme(plot.margin = unit(c(.1,.1,.1,.1), "cm"))
-    
-      TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6),    nrow(TS_data)), ] # change this date range   
-      
-    TS_data_new <- mutate(TS_data_new, period = ifelse(Treatment == 0, "Pre", "Post"))
-    TS_data_new2 <- data.frame(TS_data_new)
-    #print(TS_data_new)  
-    #str(TS_data_new)    
-    
-    
+    TS_data_new <- mutate(TS_data_new, period = ifelse(Treatment == 0 & Time_since==0, "Pre",ifelse(Treatment == 1 & Time_since==0, "Event","Post")))
+    TS_data_new <- data.frame(TS_data_new)
+
     #### CODE WORKS
-    #p <- ggplot(TS_data_new2, aes(x = date, y = vaccinations_18to65, group = period)) + 
-    #  geom_point()  + 
-    #  ggtitle(paste("Effect of the", name, "encouragement (18 to 65)")) +
-    #  labs(x = "Date", y  = "Daily Vaccinations (18 to 65)") + 
-    #  geom_smooth(method = lm, color = "#0072B5FF", se = TRUE) +
-      #geom_vline(xintercept = TS_data[interruption_index, 2] - 1, linetype = 'dashed')+
-    #  theme_ipsum() +
-    #  scale_fill_nejm() + 
-    #  theme(plot.margin = unit(c(.1,.1,.1,.1), "cm"))
-  #print(p)
+    p <- ggplot(subset(TS_data_new, period != "Event"), aes(x = date, y = vaccinations_18to65, group = period)) + 
+      geom_point()  + 
+      ggtitle(paste("Effect of the", name, "encouragement (18 to 65)")) +
+      labs(x = "Date", y  = "Daily Vaccinations (18 to 65)") + 
+      geom_smooth(aes(group=period,color=period), method=lm, se=TRUE) +
+      geom_vline(xintercept = TS_data_new$date[which(TS_data_new$Time == 146)], linetype = 'dashed')+
+      theme_ipsum() +
+      scale_fill_nejm() + 
+      theme(plot.margin = unit(c(.1,.1,.1,.1), "cm"))
+    print(p)
         #### CODE WORKS
 
   plot(TS_data_new$date, TS_data_new$vaccinations_18to65, 
