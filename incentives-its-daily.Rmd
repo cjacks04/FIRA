@@ -43,13 +43,11 @@ library(gridExtra)
 #library(Wats)          # time series plots
 library(hrbrthemes)
 library(scales)
-
 ```
 
 ``` {r, include = FALSE}
 ###### load/clean encouragement data ###### 
 incentives <- read_csv("/Volumes/cbjackson2/fira/data/incentives/Encouragement-Strategies-FINAL-06082022.csv") # loads data
-
 #incentives <- read_csv("./Encouragement-Strategies-FINAL-06082022.csv") # loads data
 incentives_original <- incentives
 # subset for now
@@ -59,9 +57,8 @@ incentives <- incentives %>%
   mutate(start = lubridate::dmy(dose1)) %>%
   drop_na(start) %>%
   select(id = record_id, name = name_given, census_tract = "Full FIPS (tract)", start,  target_age, target_racethgroup, target_gender) 
-
 incentives <- incentives[order(incentives$id), ]
- incentives <- incentives[1,]
+  
 ####### load/clean vaccination data #######
 # import total, age, gender, race/eth, and tract vaccination rates
 tract_trend <- read_csv("/Volumes/cbjackson2/fira/data/vaccination/vaccination_day_tract.csv") # loads data
@@ -101,10 +98,10 @@ __Phase 1B__
 ## A function to build ITS models for each encouragement
 
 ```{r}
-
 # create a function that builds a ITS model for an encouragement, given fips and the start date
 ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
-   interruption_date <- as.Date(interruption_date)
+ 
+  interruption_date <- as.Date(interruption_date)
   
   # filter the data according to the fips
   vaccinations_tract <- tract_trend %>%
@@ -136,41 +133,35 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
       mutate(Treatment = ifelse(date < interruption_date, 0, 1), 
              Time_since = ifelse(Treatment == 0, 0, as.integer(date - interruption_date))) %>%
       select(vaccinations_18to65, date, Time, Treatment, Time_since) 
-  print(TS_data)
   
     interruption_index <- min(which(TS_data$Time_since != 0))
-
     # show the time series in a scatter plot (only 14 days before / after the interruption) # CHANGED
-    TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
-    TS_data_new <- mutate(TS_data_new, period = ifelse(Treatment == 0 & Time_since==0, "Pre",ifelse(Treatment == 1 & Time_since==0, "Event","Post")))
-    TS_data_new <- data.frame(TS_data_new)
-
+    
+    TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6),    nrow(TS_data)), ] # change this date range   
+      
+    TS_data_new <- mutate(TS_data_new, period = ifelse(Treatment == 0, "Pre", "Post"))
+    TS_data_new2 <- data.frame(TS_data_new)
+    #print(TS_data_new)  
+    #str(TS_data_new)    
+    
     #### CODE WORKS
-    p <- ggplot(subset(TS_data_new, period != "Event"), aes(x = date, y = vaccinations_18to65, group = period)) + 
+    p1 <- ggplot(TS_data_new2, aes(x = date, y = vaccinations_18to65, group = period)) + 
       geom_point()  + 
       ggtitle(paste("Effect of the", name, "encouragement (18 to 65)")) +
       labs(x = "Date", y  = "Daily Vaccinations (18 to 65)") + 
-      geom_smooth(aes(group=period,color=period), method=lm, se=TRUE) +
-      geom_vline(xintercept = TS_data_new$date[which(TS_data_new$Time == 146)], linetype = 'dashed')+
+      geom_smooth(method = "lm", color = "#0072B5FF", se = TRUE) +
+      geom_vline(xintercept = as.numeric(TS_data_new2$date[min(which(TS_data_new2$period == "Post"))]), linetype = 'dashed', col = "red") +
       theme_ipsum() +
-      scale_fill_nejm() + 
+      scale_fill_nejm() +
       theme(plot.margin = unit(c(.1,.1,.1,.1), "cm"))
-    print(p)
-        #### CODE WORKS
+        print(p1)
+    
 
-  plot(TS_data_new$date, TS_data_new$vaccinations_18to65, 
-         bty = "n", pch = 15, col = "gray",
-         xlab = paste("Date"), ylab = "Daily Vaccinations (18 to 65)", xaxt = "n", 
-         main = paste("Effect of the", name, "encouragement (18 to 65)"))
-    axis(1, TS_data_new$date, format(TS_data_new$date, "%Y-%m-%d"))
-  
-    # mark the interruption date
-    abline(v = TS_data[interruption_index, 2] - 1, col = "firebrick", lty = 2) 
-  text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_18to65), "Start of Encouragement", col = "firebrick", cex = 1.3, pos = 4)
+    #### CODE WORKS
 
     # add the regression line
     TS_model <- lm(vaccinations_18to65 ~ Time + Treatment + Time_since, data = TS_data_new)
-    lines(TS_data_new$date, TS_model$fitted.values, col = "steelblue", lwd = 2 )
+    #lines(TS_data_new$date, TS_model$fitted.values, col = "steelblue", lwd = 2 )
     summary(TS_model)
   
     # get the ITS model
@@ -181,14 +172,12 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
   
     # look at the trend only during the 2 weeks
       during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] # CHANGED
-      plot(during_encouragment$date, during_encouragment$vaccinations_18to65, 
-         bty = "n", pch = 15, col = "gray",
-         xlab = paste("Date"), ylab = "Daily Vaccinations (18 to 65)", xaxt = "n", 
-         main = paste("Daily Vaccinations Trend during the Encouragment (18 to 65)"))
-     axis(1, TS_data_new$date, format(TS_data_new$date, "%Y-%m-%d"))
-     if (nrow(drop_na(during_encouragment)) >= 2) {
-        abline(lm(vaccinations_18to65 ~ date, data = during_encouragment), col="steelblue", lwd = 2)
-      }
+      p2 <- ggplot(during_encouragment, aes(x = date, y = vaccinations_18to65)) +
+        labs(x = "Date", y = "Daily Vaccinations (18 to 65)") + 
+        ggtitle(paste("Daily Vaccinations Trend during the Encouragment (18 to 65)")) +
+        geom_point() +
+        geom_smooth(method = "lm", col = "gray", se = TRUE)
+      print(p2)
   
     model <- summary(TS_model)
     if (length(model) == 0) {
@@ -219,7 +208,7 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
                              "Difference (Day 3)" = actual_0 - counterfactual_3, 
                              "Actual (Day 5)" =  actual_5, 
                              "Counterfactual (Day 5)" = counterfactual_5, 
-                             "Difference (Day 5)" = actual_5 - counterfactual_5)
+                             "Difference (Day 5)" = actual_5 - counterfactual_5)  
       model
     }
   }
@@ -234,38 +223,43 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
  
     # show the time series in a scatter plot (only 14 days before / after the interruption)
     TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
-
-    plot(TS_data_new$date, TS_data_new$vaccinations_under18, 
-         bty = "n", pch = 15, col = "gray",
-         xlab = paste("Date"), ylab = "Daily Vaccinations (under 18)", xaxt = "n", 
-         main = paste("Effect of the", name, "encouragement (under 18)"))
-    axis(1, TS_data_new$date, format(TS_data_new$date, "%Y-%m-%d"))
-  
-    # mark the interruption date
-    abline(v = TS_data[interruption_index, 2] - 1, col = "firebrick", lty = 2) 
-    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_under18), "Start of Encouragement", col = "firebrick", cex = 1.3, pos = 4)
+    TS_data_new <- mutate(TS_data_new, period = ifelse(Treatment == 0, "Pre", "Post"))
+    TS_data_new2 <- data.frame(TS_data_new)
+    #print(TS_data_new)  
+    #str(TS_data_new)    
+    
+    #### CODE WORKS
+    p1 <- ggplot(TS_data_new2, aes(x = date, y = vaccinations_under18, group = period)) + 
+      geom_point()  + 
+      ggtitle(paste("Effect of the", name, "encouragement (under 18)")) +
+      labs(x = "Date", y  = "Daily Vaccinations (under 18)") + 
+      geom_smooth(method = "lm", color = "#0072B5FF", se = TRUE) +
+      geom_vline(xintercept = as.numeric(TS_data_new2$date[min(which(TS_data_new2$period == "Post"))]), linetype = 'dashed', col = "red") +
+      theme_ipsum() +
+      scale_fill_nejm() +
+      theme(plot.margin = unit(c(.1,.1,.1,.1), "cm"))
+    print(p1)
+    #### CODE WORKS
 
     # add the regression line
     TS_model <- lm(vaccinations_under18 ~ Time + Treatment + Time_since, data = TS_data_new)
-    lines(TS_data_new$date, TS_model$fitted.values, col = "steelblue", lwd = 2 )
+    #lines(TS_data_new$date, TS_model$fitted.values, col = "steelblue", lwd = 2 )
     summary(TS_model)
   
     # get the ITS model
-    stargazer(TS_model, type = "html", dep.var.labels = ("Daily Vaccinations (under 18)"), 
+    stargazer(TS_model, type = "html", dep.var.labels = ("Daily Vaccinations (Under 18)"), 
            column.labels = ("Model results"), 
            covariate.labels = c("Time", "Encouragement", "Time Since Encouragement"),
            omit.stat = "all", digits = 2)
   
     # look at the trend only during the 2 weeks
       during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] # CHANGED
-      plot(during_encouragment$date, during_encouragment$vaccinations_under18, 
-         bty = "n", pch = 15, col = "gray",
-         xlab = paste("Date"), ylab = "Daily Vaccinations (under 18)", xaxt = "n", 
-         main = paste("Daily Vaccinations Trend during the Encouragment (under 18)"))
-     axis(1, TS_data_new$date, format(TS_data_new$date, "%Y-%m-%d"))
-     if (nrow(drop_na(during_encouragment)) >= 2) {
-        abline(lm(vaccinations_under18 ~ date, data = during_encouragment), col="steelblue", lwd = 2)
-      }
+      p2 <- ggplot(during_encouragment, aes(x = date, y = vaccinations_under18)) +
+        labs(x = "Date", y = "Daily Vaccinations (Under 18)") + 
+        ggtitle(paste("Daily Vaccinations Trend during the Encouragment (Under 18)")) +
+        geom_point() +
+        geom_smooth(method = "lm", col = "gray", se = TRUE)
+      print(p2)
   
     model <- summary(TS_model)
     if (length(model) == 0) {
@@ -308,23 +302,29 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
       select(vaccinations_black, date, Time, Treatment, Time_since) 
   
     interruption_index <- min(which(TS_data$Time_since != 0))
-
     # show the time series in a scatter plot (only 14 days before / after the interruption)
     TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
-
-    plot(TS_data_new$date, TS_data_new$vaccinations_black, 
-         bty = "n", pch = 15, col = "gray",
-         xlab = paste("Date"), ylab = "Daily Vaccinations (Black)", xaxt = "n", 
-         main = paste("Effect of the", name, "encouragement (Black)"))
-    axis(1, TS_data_new$date, format(TS_data_new$date, "%Y-%m-%d"))
-  
-    # mark the interruption date
-    abline(v = TS_data[interruption_index, 2] - 1, col = "firebrick", lty = 2) 
-    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_black), "Start of Encouragement", col = "firebrick", cex = 1.3, pos = 4)
+    TS_data_new <- mutate(TS_data_new, period = ifelse(Treatment == 0, "Pre", "Post"))
+    TS_data_new2 <- data.frame(TS_data_new)
+    #print(TS_data_new)  
+    #str(TS_data_new)    
+    
+    #### CODE WORKS
+    p1 <- ggplot(TS_data_new2, aes(x = date, y = vaccinations_black, group = period)) + 
+      geom_point()  + 
+      ggtitle(paste("Effect of the", name, "encouragement (Black)")) +
+      labs(x = "Date", y  = "Daily Vaccinations (Black)") + 
+      geom_smooth(method = "lm", color = "#0072B5FF", se = TRUE) +
+      geom_vline(xintercept = as.numeric(TS_data_new2$date[min(which(TS_data_new2$period == "Post"))]), linetype = 'dashed', col = "red") +
+      theme_ipsum() +
+      scale_fill_nejm() +
+      theme(plot.margin = unit(c(.1,.1,.1,.1), "cm"))
+    print(p1)
+    #### CODE WORKS
 
     # add the regression line
     TS_model <- lm(vaccinations_black ~ Time + Treatment + Time_since, data = TS_data_new)
-    lines(TS_data_new$date, TS_model$fitted.values, col = "steelblue", lwd = 2 )
+    #lines(TS_data_new$date, TS_model$fitted.values, col = "steelblue", lwd = 2 )
     summary(TS_model)
   
     # get the ITS model
@@ -334,15 +334,13 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
            omit.stat = "all", digits = 2)
   
     # look at the trend only during the 2 weeks
-      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] #CHANGE
-      plot(during_encouragment$date, during_encouragment$vaccinations_black, 
-         bty = "n", pch = 15, col = "gray",
-         xlab = paste("Date"), ylab = "Daily Vaccinations (Black)", xaxt = "n", 
-         main = paste("Daily Vaccinations Trend during the Encouragment (Black)"))
-     axis(1, TS_data_new$date, format(TS_data_new$date, "%Y-%m-%d"))
-     if (nrow(drop_na(during_encouragment)) >= 2) {
-        abline(lm(vaccinations_black ~ date, data = during_encouragment), col="steelblue", lwd = 2)
-      }
+      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] # CHANGED
+      p2 <- ggplot(during_encouragment, aes(x = date, y = vaccinations_black)) +
+        labs(x = "Date", y = "Daily Vaccinations (Black)") + 
+        ggtitle(paste("Daily Vaccinations Trend during the Encouragment (Black)")) +
+        geom_point() +
+        geom_smooth(method = "lm", col = "gray", se = TRUE)
+      print(p2)
     
     model <- summary(TS_model)
     if (length(model) == 0) {
@@ -388,20 +386,27 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
  
     # show the time series in a scatter plot (only 14 days before / after the interruption)
     TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
-
-    plot(TS_data_new$date, TS_data_new$vaccinations_aian, 
-         bty = "n", pch = 15, col = "gray",
-         xlab = paste("Date"), ylab = "Daily Vaccinations (Aian)", xaxt = "n", 
-         main = paste("Effect of the", name, "encouragement (Aian)"))
-    axis(1, TS_data_new$date, format(TS_data_new$date, "%Y-%m-%d"))
-  
-    # mark the interruption date
-    abline(v = TS_data[interruption_index, 2] - 1, col = "firebrick", lty = 2) 
-    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_aian), "Start of Encouragement", col = "firebrick", cex = 1.3, pos = 4)
+    TS_data_new <- mutate(TS_data_new, period = ifelse(Treatment == 0, "Pre", "Post"))
+    TS_data_new2 <- data.frame(TS_data_new)
+    #print(TS_data_new)  
+    #str(TS_data_new)    
+    
+    #### CODE WORKS
+    p1 <- ggplot(TS_data_new2, aes(x = date, y = vaccinations_aian, group = period)) + 
+      geom_point()  + 
+      ggtitle(paste("Effect of the", name, "encouragement (Aian)")) +
+      labs(x = "Date", y  = "Daily Vaccinations (Aian)") + 
+      geom_smooth(method = "lm", color = "#0072B5FF", se = TRUE) +
+      geom_vline(xintercept = as.numeric(TS_data_new2$date[min(which(TS_data_new2$period == "Post"))]), linetype = 'dashed', col = "red") +
+      theme_ipsum() +
+      scale_fill_nejm() +
+      theme(plot.margin = unit(c(.1,.1,.1,.1), "cm"))
+    print(p1)
+    #### CODE WORKS
 
     # add the regression line
     TS_model <- lm(vaccinations_aian ~ Time + Treatment + Time_since, data = TS_data_new)
-    lines(TS_data_new$date, TS_model$fitted.values, col = "steelblue", lwd = 2 )
+    #lines(TS_data_new$date, TS_model$fitted.values, col = "steelblue", lwd = 2 )
     summary(TS_model)
   
     # get the ITS model
@@ -411,15 +416,13 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
            omit.stat = "all", digits = 2)
   
     # look at the trend only during the 2 weeks
-      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] #CHANGE
-      plot(during_encouragment$date, during_encouragment$vaccinations_aian, 
-         bty = "n", pch = 15, col = "gray",
-         xlab = paste("Date"), ylab = "Daily Vaccinations (Aian)", xaxt = "n", 
-         main = paste("Daily Vaccinations Trend during the Encouragment (Aian)"))
-     axis(1, TS_data_new$date, format(TS_data_new$date, "%Y-%m-%d"))
-     if (nrow(drop_na(during_encouragment)) >= 2) {
-        abline(lm(vaccinations_aian ~ date, data = during_encouragment), col="steelblue", lwd = 2)
-      }
+      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] # CHANGED
+      p2 <- ggplot(during_encouragment, aes(x = date, y = vaccinations_aian)) +
+        labs(x = "Date", y = "Daily Vaccinations (Aian)") + 
+        ggtitle(paste("Daily Vaccinations Trend during the Encouragment (Aian)")) +
+        geom_point() +
+        geom_smooth(method = "lm", col = "gray", se = TRUE)
+      print(p2)
     
     model <- summary(TS_model)
     if (length(model) == 0) {
@@ -465,20 +468,27 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
     
     # show the time series in a scatter plot (only 14 days before / after the interruption)
     TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
-
-    plot(TS_data_new$date, TS_data_new$vaccinations_Ehispanic, 
-         bty = "n", pch = 15, col = "gray",
-         xlab = paste("Date"), ylab = "Daily Vaccinations (Hispanic)", xaxt = "n", 
-         main = paste("Effect of the", name, "encouragement (Hispanic)"))
-    axis(1, TS_data_new$date, format(TS_data_new$date, "%Y-%m-%d"))
-  
-    # mark the interruption date
-    abline(v = TS_data[interruption_index, 2] - 1, col = "firebrick", lty = 2) 
-    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_Ehispanic), "Start of Encouragement", col = "firebrick", cex = 1.3, pos = 4)
+    TS_data_new <- mutate(TS_data_new, period = ifelse(Treatment == 0, "Pre", "Post"))
+    TS_data_new2 <- data.frame(TS_data_new)
+    #print(TS_data_new)  
+    #str(TS_data_new)    
+    
+    #### CODE WORKS
+    p1 <- ggplot(TS_data_new2, aes(x = date, y = vaccinations_Ehispanic, group = period)) + 
+      geom_point()  + 
+      ggtitle(paste("Effect of the", name, "encouragement (Hispanic)")) +
+      labs(x = "Date", y  = "Daily Vaccinations (Hispanic)") + 
+      geom_smooth(method = "lm", color = "#0072B5FF", se = TRUE) +
+      geom_vline(xintercept = as.numeric(TS_data_new2$date[min(which(TS_data_new2$period == "Post"))]), linetype = 'dashed', col = "red") +
+      theme_ipsum() +
+      scale_fill_nejm() +
+      theme(plot.margin = unit(c(.1,.1,.1,.1), "cm"))
+    print(p1)
+    #### CODE WORKS
 
     # add the regression line
     TS_model <- lm(vaccinations_Ehispanic ~ Time + Treatment + Time_since, data = TS_data_new)
-    lines(TS_data_new$date, TS_model$fitted.values, col = "steelblue", lwd = 2 )
+    #lines(TS_data_new$date, TS_model$fitted.values, col = "steelblue", lwd = 2 )
     summary(TS_model)
   
     # get the ITS model
@@ -488,15 +498,13 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
            omit.stat = "all", digits = 2)
   
     # look at the trend only during the 2 weeks
-      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] #CHANGE
-      plot(during_encouragment$date, during_encouragment$vaccinations_Ehispanic, 
-         bty = "n", pch = 15, col = "gray",
-         xlab = paste("Date"), ylab = "Daily Vaccinations (Hispanic)", xaxt = "n", 
-         main = paste("Daily Vaccinations Trend during the Encouragment (Hispanic)"))
-     axis(1, TS_data_new$date, format(TS_data_new$date, "%Y-%m-%d"))
-     if (nrow(drop_na(during_encouragment)) >= 2) {
-        abline(lm(vaccinations_Ehispanic ~ date, data = during_encouragment), col="steelblue", lwd = 2)
-      }
+      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] # CHANGED
+      p2 <- ggplot(during_encouragment, aes(x = date, y = vaccinations_Ehispanic)) +
+        labs(x = "Date", y = "Daily Vaccinations (Hispanic)") + 
+        ggtitle(paste("Daily Vaccinations Trend during the Encouragment (Hispanic)")) +
+        geom_point() +
+        geom_smooth(method = "lm", col = "gray", se = TRUE)
+      print(p2)
     
     model <- summary(TS_model)
     if (length(model) == 0) {
@@ -539,23 +547,29 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
       select(vaccinations_asian, date, Time, Treatment, Time_since) 
   
     interruption_index <- min(which(TS_data$Time_since != 0))
-
     # show the time series in a scatter plot (only 14 days before / after the interruption)
     TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
-
-    plot(TS_data_new$date, TS_data_new$vaccinations_asian, 
-         bty = "n", pch = 15, col = "gray",
-         xlab = paste("Date"), ylab = "Daily Vaccinations (Asian)", xaxt = "n", 
-         main = paste("Effect of the", name, "encouragement (Asian)"))
-    axis(1, TS_data_new$date, format(TS_data_new$date, "%Y-%m-%d"))
-  
-    # mark the interruption date
-    abline(v = TS_data[interruption_index, 2] - 1, col = "firebrick", lty = 2) 
-    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_asian), "Start of Encouragement", col = "firebrick", cex = 1.3, pos = 4)
+    TS_data_new <- mutate(TS_data_new, period = ifelse(Treatment == 0, "Pre", "Post"))
+    TS_data_new2 <- data.frame(TS_data_new)
+    #print(TS_data_new)  
+    #str(TS_data_new)    
+    
+    #### CODE WORKS
+    p1 <- ggplot(TS_data_new2, aes(x = date, y = vaccinations_asian, group = period)) + 
+      geom_point()  + 
+      ggtitle(paste("Effect of the", name, "encouragement (Asian)")) +
+      labs(x = "Date", y  = "Daily Vaccinations (Asian)") + 
+      geom_smooth(method = "lm", color = "#0072B5FF", se = TRUE) +
+      geom_vline(xintercept = as.numeric(TS_data_new2$date[min(which(TS_data_new2$period == "Post"))]), linetype = 'dashed', col = "red") +
+      theme_ipsum() +
+      scale_fill_nejm() +
+      theme(plot.margin = unit(c(.1,.1,.1,.1), "cm"))
+    print(p1)
+    #### CODE WORKS
 
     # add the regression line
     TS_model <- lm(vaccinations_asian ~ Time + Treatment + Time_since, data = TS_data_new)
-    lines(TS_data_new$date, TS_model$fitted.values, col = "steelblue", lwd = 2 )
+    #lines(TS_data_new$date, TS_model$fitted.values, col = "steelblue", lwd = 2 )
     summary(TS_model)
   
     # get the ITS model
@@ -565,15 +579,13 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
            omit.stat = "all", digits = 2)
   
     # look at the trend only during the 2 weeks
-      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] #CHANGE
-      plot(during_encouragment$date, during_encouragment$vaccinations_asian, 
-         bty = "n", pch = 15, col = "gray",
-         xlab = paste("Date"), ylab = "Daily Vaccinations (Asian)", xaxt = "n", 
-         main = paste("Daily Vaccinations Trend during the Encouragment (Asian)"))
-     axis(1, TS_data_new$date, format(TS_data_new$date, "%Y-%m-%d"))
-     if (nrow(drop_na(during_encouragment)) >= 2) {
-        abline(lm(vaccinations_asian ~ date, data = during_encouragment), col="steelblue", lwd = 2)
-      }
+      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] # CHANGED
+      p2 <- ggplot(during_encouragment, aes(x = date, y = vaccinations_asian)) +
+        labs(x = "Date", y = "Daily Vaccinations (Asian)") + 
+        ggtitle(paste("Daily Vaccinations Trend during the Encouragment (Asian)")) +
+        geom_point() +
+        geom_smooth(method = "lm", col = "gray", se = TRUE)
+      print(p2)
     
     model <- summary(TS_model)
     if (length(model) == 0) {
@@ -616,41 +628,45 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
       select(vaccinations_day, date, Time, Treatment, Time_since) 
   
     interruption_index <- min(which(TS_data$Time_since != 0))
-
     # show the time series in a scatter plot (only 14 days before / after the interruption)
     TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
-
-    plot(TS_data_new$date, TS_data_new$vaccinations_day, 
-         bty = "n", pch = 15, col = "gray",
-         xlab = paste("Date"), ylab = "Daily Vaccinations (all)", xaxt = "n", 
-         main = paste("Effect of the", name, "encouragement (all)"))
-    axis(1, TS_data_new$date, format(TS_data_new$date, "%Y-%m-%d"))
-  
-    # mark the interruption date
-    abline(v = TS_data[interruption_index, 2] - 1, col = "firebrick", lty = 2) 
-    text(TS_data[interruption_index, 2] - 1, max(TS_data_new$vaccinations_day), "Start of Encouragement", col = "firebrick", cex = 1.3, pos = 4)
+    TS_data_new <- mutate(TS_data_new, period = ifelse(Treatment == 0, "Pre", "Post"))
+    TS_data_new2 <- data.frame(TS_data_new)
+    #print(TS_data_new)  
+    #str(TS_data_new)    
+    
+    #### CODE WORKS
+    p1 <- ggplot(TS_data_new2, aes(x = date, y = vaccinations_day, group = period)) + 
+      geom_point()  + 
+      ggtitle(paste("Effect of the", name, "encouragement (All)")) +
+      labs(x = "Date", y  = "Daily Vaccinations (All)") + 
+      geom_smooth(method = "lm", color = "#0072B5FF", se = TRUE) +
+      geom_vline(xintercept = as.numeric(TS_data_new2$date[min(which(TS_data_new2$period == "Post"))]), linetype = 'dashed', col = "red") +
+      theme_ipsum() +
+      scale_fill_nejm() +
+      theme(plot.margin = unit(c(.1,.1,.1,.1), "cm"))
+    print(p1)
+    #### CODE WORKS
 
     # add the regression line
     TS_model <- lm(vaccinations_day ~ Time + Treatment + Time_since, data = TS_data_new)
-    lines(TS_data_new$date, TS_model$fitted.values, col = "steelblue", lwd = 2 )
+    #lines(TS_data_new$date, TS_model$fitted.values, col = "steelblue", lwd = 2 )
     summary(TS_model)
   
     # get the ITS model
-    stargazer(TS_model, type = "html", dep.var.labels = ("Daily Vaccinations (all)"), 
+    stargazer(TS_model, type = "html", dep.var.labels = ("Daily Vaccinations (All)"), 
            column.labels = ("Model results"), 
            covariate.labels = c("Time", "Encouragement", "Time Since Encouragement"),
            omit.stat = "all", digits = 2)
   
     # look at the trend only during the 2 weeks
-      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] #CHANGE
-      plot(during_encouragment$date, during_encouragment$vaccinations_day, 
-         bty = "n", pch = 15, col = "gray",
-         xlab = paste("Date"), ylab = "Daily Vaccinations (all)", xaxt = "n", 
-         main = paste("Daily Vaccinations Trend during the Encouragment (all)"))
-     axis(1, TS_data_new$date, format(TS_data_new$date, "%Y-%m-%d"))
-     if (nrow(drop_na(during_encouragment)) >= 2) {
-        abline(lm(vaccinations_day ~ date, data = during_encouragment), col="steelblue", lwd = 2)
-      }
+      during_encouragment <- TS_data[max(1, (interruption_index)) : min(nrow(TS_data), (interruption_index + 7)),] # CHANGED
+      p2 <- ggplot(during_encouragment, aes(x = date, y = vaccinations_day)) +
+        labs(x = "Date", y = "Daily Vaccinations (All)") + 
+        ggtitle(paste("Daily Vaccinations Trend during the Encouragment (All)")) +
+        geom_point() +
+        geom_smooth(method = "lm", col = "gray", se = TRUE)
+      print(p2)
     
     model <- summary(TS_model)
     if (length(model) == 0) {
