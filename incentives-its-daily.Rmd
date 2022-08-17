@@ -134,7 +134,7 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
              Time_since = ifelse(Treatment == 0, 0, as.integer(date - interruption_date))) %>%
       select(vaccinations_18to65, date, Time, Treatment, Time_since) 
   
-    interruption_index <- min(which(TS_data$Time_since != 0))
+    interruption_index <- max(which(TS_data$Time_since == 0))
     # show the time series in a scatter plot (only 14 days before / after the interruption) # CHANGED
     
     TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6),    nrow(TS_data)), ] # change this date range   
@@ -219,7 +219,7 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
              Time_since = ifelse(Treatment == 0, 0, as.integer(date - interruption_date))) %>%
       select(vaccinations_under18, date, Time, Treatment, Time_since) 
   
-    interruption_index <- min(which(TS_data$Time_since != 0))
+    interruption_index <- max(which(TS_data$Time_since == 0))
  
     # show the time series in a scatter plot (only 14 days before / after the interruption)
     TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
@@ -301,7 +301,7 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
              Time_since = ifelse(Treatment == 0, 0, as.integer(date - interruption_date))) %>%
       select(vaccinations_black, date, Time, Treatment, Time_since) 
   
-    interruption_index <- min(which(TS_data$Time_since != 0))
+    interruption_index <- max(which(TS_data$Time_since == 0))
     # show the time series in a scatter plot (only 14 days before / after the interruption)
     TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
     TS_data_new <- mutate(TS_data_new, period = ifelse(Treatment == 0, "Pre", "Post"))
@@ -382,7 +382,7 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
              Time_since = ifelse(Treatment == 0, 0, as.integer(date - interruption_date))) %>%
       select(vaccinations_aian, date, Time, Treatment, Time_since) 
   
-    interruption_index <- min(which(TS_data$Time_since != 0))
+    interruption_index <- max(which(TS_data$Time_since == 0))
  
     # show the time series in a scatter plot (only 14 days before / after the interruption)
     TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
@@ -464,7 +464,7 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
              Time_since = ifelse(Treatment == 0, 0, as.integer(date - interruption_date))) %>%
       select(vaccinations_Ehispanic, date, Time, Treatment, Time_since) 
   
-    interruption_index <- min(which(TS_data$Time_since != 0))
+    interruption_index <- max(which(TS_data$Time_since == 0))
     
     # show the time series in a scatter plot (only 14 days before / after the interruption)
     TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
@@ -546,7 +546,7 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
              Time_since = ifelse(Treatment == 0, 0, as.integer(date - interruption_date))) %>%
       select(vaccinations_asian, date, Time, Treatment, Time_since) 
   
-    interruption_index <- min(which(TS_data$Time_since != 0))
+    interruption_index <- max(which(TS_data$Time_since == 0))
     # show the time series in a scatter plot (only 14 days before / after the interruption)
     TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
     TS_data_new <- mutate(TS_data_new, period = ifelse(Treatment == 0, "Pre", "Post"))
@@ -627,7 +627,7 @@ ITS_model <- function(id, tract, interruption_date, age, race, gender, name) {
              Time_since = ifelse(Treatment == 0, 0, as.integer(date - interruption_date))) %>%
       select(vaccinations_day, date, Time, Treatment, Time_since) 
   
-    interruption_index <- min(which(TS_data$Time_since != 0))
+    interruption_index <- max(which(TS_data$Time_since == 0))
     # show the time series in a scatter plot (only 14 days before / after the interruption)
     TS_data_new <- TS_data[max(1, (interruption_index - 7)) : min((interruption_index + 6), nrow(TS_data)), ] # change this date range
     TS_data_new <- mutate(TS_data_new, period = ifelse(Treatment == 0, "Pre", "Post"))
