@@ -1,0 +1,34 @@
+---
+title: "incentive_dataset"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(readr)
+library(DT)
+
+
+
+summary <- read_csv("/Volumes/cbjackson2/fira/data/public/summary.csv")
+
+Encouragement_Strategies_FINAL_06082022 <- read_csv("/Volumes/cbjackson2/fira/data/incentives/Encouragement-Strategies-FINAL-06082022.csv")
+
+Encouragement_Strategies_FINAL_06082022$full_name <- paste(Encouragement_Strategies_FINAL_06082022$name_given,"(",Encouragement_Strategies_FINAL_06082022$Address,Encouragement_Strategies_FINAL_06082022$City,Encouragement_Strategies_FINAL_06082022$County,Encouragement_Strategies_FINAL_06082022$State,"Tract:",Encouragement_Strategies_FINAL_06082022$`Full FIPS (tract)`,")")
+
+incentive_dataset <- merge(Encouragement_Strategies_FINAL_06082022, summary, by.x ="record_id", by.y="ID")
+
+incentive_dataset$dose1 <- as.Date(incentive_dataset$dose1, format="%d-%b-%y")
+start <- as.Date("2021-04-15", format="%Y-%m-%d")
+incentive_dataset$dayssince <- difftime(incentive_dataset$dose1,start, units="days")
+
+incentives_final <- data.frame(incentive_dataset$full_name,incentive_dataset$dose1, incentive_dataset$tag, incentive_dataset$dayssince, incentive_dataset$Group, round(incentive_dataset$Time, digits = 2), round(incentive_dataset$Treatment, digits = 2), round(incentive_dataset$`Time Since`, digits = 2))
+
+
+names(incentives_final)[c(1,2,3,4,5,6,7,8)] <- c("Vaccination event name  (Address, Census Tract)", "Date of Vaccination Event", "Incentive Offered", "Days since the population was eligible", "Tract Vaccination (%) at treatment", "Pre- event", "Event", "Post- event")
+```
+
+```{r}
+datatable(incentives_final)
+```
+
+
